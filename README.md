@@ -14,6 +14,7 @@ Log your food. Gain XP. Level up when the scale moves. Miss a day — lose HP. S
 | Auth | DRF Token Authentication |
 | Database | SQLite (dev) · PostgreSQL via psycopg2 (prod) |
 | Task Queue | Celery 5 + Redis |
+| Bot | python-telegram-bot 22 |
 | Config | python-decouple |
 
 ---
@@ -50,6 +51,47 @@ python manage.py runserver
 ```bash
 celery -A massquest worker -l info   # terminal 1
 celery -A massquest beat -l info     # terminal 2
+```
+
+---
+
+## Telegram Bot
+
+MassQuest has a Telegram bot as the primary interface — no app install needed.
+
+**Setup:**
+```bash
+# 1. Get a token from @BotFather on Telegram
+# 2. Add it to your .env
+TELEGRAM_BOT_TOKEN=your-token-here
+
+# 3. Run the bot
+python manage.py run_bot
+```
+
+**Commands:**
+
+| Command | Description |
+|---|---|
+| `/start` | Register your character (target 80 kg by default) |
+| `/eat <cal>` | Log calories → earn XP |
+| `/weight <kg>` | Log weight → triggers level-up if +1 kg gained |
+| `/status` | View your full character card |
+| `/help` | List all commands |
+
+**Example responses:**
+```
+/eat 600
+→ 🍗 +600 kcal logged
+   ⚔️ +60 XP | Total: 340 XP
+   ❤️ HP: 100/100
+   📅 Today: 600 kcal
+
+/status
+→ 🧬 Xand | Lv.3 Warrior
+   ⚔️ XP: 340
+   ❤️ HP: 80/100
+   ⚖️ Weight: 72.5 kg → 80 kg target
 ```
 
 ---
@@ -118,6 +160,7 @@ See `.env.example` for all variables. Required:
 | `DEBUG` | `True` for development |
 | `DATABASE_URL` | PostgreSQL URL (prod) |
 | `REDIS_URL` | Redis URL for Celery |
+| `TELEGRAM_BOT_TOKEN` | Token from @BotFather |
 
 ---
 
