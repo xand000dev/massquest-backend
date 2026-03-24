@@ -122,6 +122,105 @@ class GameEngine:
                 return rank
         return "God"
 
+    # ------------------------------------------------------------------
+    # Daily quests
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def get_or_create_daily_quests(user) -> list:
+        """
+        Return today's quests for user, creating them if they don't exist.
+
+        Quest 1 — always: hit 2,000 kcal
+        Quest 2 — rotates by weekday:
+          Mon/Thu/Sun → log weight
+          Tue/Fri     → eat a single big meal (≥800 kcal)
+          Wed/Sat     → log first meal before noon
+        """
+        from game.models import Quest
+
+        today = timezone.localdate()
+
+        quest1, _ = Quest.objects.get_or_create(
+            user=user, date=today, quest_type="calorie_goal",
+            defaults={
+                "description": "Eat at least 2,000 kcal today",
+                "target_value": 2000,
+                "xp_reward": 50,
+            },
+        )
+
+        dow = today.weekday()  # 0=Mon … 6=Sun
+        if dow in (0, 3, 6):
+            q2_type = "log_weight"
+            q2 = {"description": "Log your weight today", "target_value": 1, "xp_reward": 30}
+        elif dow in (1, 4):
+            q2_type = "big_meal"
+            q2 = {"description": "Log a single meal over 800 kcal", "target_value": 800, "xp_reward": 40}
+        else:
+            q2_type = "early_meal"
+            q2 = {"description": "Log your first meal before noon", "target_value": 1, "xp_reward": 35}
+
+        quest2, _ = Quest.objects.get_or_create(
+            user=user, date=today, quest_type=q2_type, defaults=q2,
+        )
+        return [quest1, quest2]
+
+    @staticmethod
+    def update_quests_for_calories(user, calories_this_session: int, log) -> list[str]:
+        """
+        Called after logging calories. Updates calorie_goal and big_meal quests.
+        Returns list of newly-completed quest descriptions.
+        """
+        from game.models import Quest
+
+        today = timezone.localdate()
+        newly_done: list[str] = []
+
+        # calorie_goal — use total log calories
+        try:
+            cq = Quest.objects.get(user=user, date=today, quest_type="calorie_goal")
+            if not cq.completed:
+                cq.current_value = log.calories_eaten
+                if cq.current_value >= cq.target_value:
+                    cq.completed = True
+                    newly_done.append(cq.description)
+                cq.save(update_fields=["current_value", "completed"])
+        except Quest.DoesNotExist:
+            pass
+
+        # big_meal — any single session ≥ 800 kcal
+        if calories_this_session >= 800:
+            try:
+                bq = Quest.objects.get(user=user, date=today, quest_type="big_meal")
+                if not bq.completed:
+                    bq.current_value = calories_this_session
+                    bq.completed = True
+                    bq.save(update_fields=["current_value", "completed"])
+                    newly_done.append(bq.description)
+            except Quest.DoesNotExist:
+                pass
+
+        return newly_done
+
+    @staticmethod
+    def update_quests_for_weight(user) -> list[str]:
+        """Called after logging weight. Marks log_weight quest complete."""
+        from game.models import Quest
+
+        today = timezone.localdate()
+        newly_done: list[str] = []
+        try:
+            wq = Quest.objects.get(user=user, date=today, quest_type="log_weight")
+            if not wq.completed:
+                wq.current_value = 1
+                wq.completed = True
+                wq.save(update_fields=["current_value", "completed"])
+                newly_done.append(wq.description)
+        except Quest.DoesNotExist:
+            pass
+        return newly_done
+
     @classmethod
     def get_status(cls, profile: CharacterProfile) -> dict:
         """

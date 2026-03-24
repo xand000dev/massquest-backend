@@ -46,6 +46,34 @@ class DailyLog(models.Model):
         return f"{self.user.username} — {self.date} ({self.calories_eaten} kcal)"
 
 
+class Quest(models.Model):
+    """A daily quest assigned to a user."""
+
+    TYPES = (
+        ("calorie_goal", "Hit Calorie Goal"),
+        ("log_weight",   "Log Your Weight"),
+        ("big_meal",     "Eat a Big Meal"),
+        ("early_meal",   "Log Before Noon"),
+    )
+
+    user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name="quests")
+    date        = models.DateField(default=timezone.localdate)
+    quest_type  = models.CharField(max_length=32, choices=TYPES)
+    description = models.CharField(max_length=255)
+    target_value  = models.PositiveIntegerField(default=1)
+    current_value = models.PositiveIntegerField(default=0)
+    xp_reward   = models.PositiveIntegerField(default=50)
+    completed   = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ("user", "date", "quest_type")
+        ordering = ["-date", "completed"]
+
+    def __str__(self) -> str:
+        status = "✓" if self.completed else "○"
+        return f"{status} {self.user.username} — {self.description} ({self.date})"
+
+
 class FoodEntry(models.Model):
     """A single food item logged by a user."""
 

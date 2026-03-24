@@ -8,11 +8,13 @@ POST /set-target/    — set target_weight on CharacterProfile
 POST /log-calories/  — add calories to today's DailyLog and award XP
 POST /log-weight/    — record today's weight and check for a level-up
 GET  /status/        — return the character's current RPG stats
+GET  /quests/        — return today's daily quests (created on first call)
 """
 
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -20,7 +22,7 @@ from rest_framework.views import APIView
 
 from game.game_engine import GameEngine
 from game.models import CharacterProfile, DailyLog
-from game.serializers import CharacterProfileSerializer, DailyLogSerializer
+from game.serializers import CharacterProfileSerializer, DailyLogSerializer, QuestSerializer
 
 
 class RegisterView(APIView):
@@ -47,8 +49,9 @@ class RegisterView(APIView):
 
         user = User.objects.create_user(username=username, password=password)
         CharacterProfile.objects.create(user=user, target_weight=80)
+        token, _ = Token.objects.get_or_create(user=user)
 
-        return Response({"id": user.id, "username": user.username}, status=status.HTTP_201_CREATED)
+        return Response({"id": user.id, "username": user.username, "token": token.key}, status=status.HTTP_201_CREATED)
 
 
 class SetTargetView(APIView):
@@ -121,11 +124,27 @@ class LogCaloriesView(APIView):
         profile.xp += xp_gained
         profile.save(update_fields=["xp"])
 
+        # Update quests; award bonus XP for completions
+        completed_quests = GameEngine.update_quests_for_calories(request.user, calories, log)
+        bonus_xp = 0
+        for _ in completed_quests:
+            from game.models import Quest
+            try:
+                q = Quest.objects.get(user=request.user, date=timezone.localdate(),
+                                      quest_type="calorie_goal")
+                bonus_xp += q.xp_reward
+            except Quest.DoesNotExist:
+                pass
+        if bonus_xp:
+            profile.xp += bonus_xp
+            profile.save(update_fields=["xp"])
+
         return Response(
             {
                 "calories_eaten_today": log.calories_eaten,
-                "xp_gained": xp_gained,
+                "xp_gained": xp_gained + bonus_xp,
                 "total_xp": profile.xp,
+                "quests_completed": completed_quests,
             },
             status=status.HTTP_200_OK,
         )
@@ -167,14 +186,40 @@ class LogWeightView(APIView):
 
         leveled_up = GameEngine.check_level_up(profile)
 
+        completed_quests = GameEngine.update_quests_for_weight(request.user)
+        if completed_quests:
+            from game.models import Quest
+            try:
+                q = Quest.objects.get(user=request.user, date=timezone.localdate(),
+                                      quest_type="log_weight")
+                profile.xp += q.xp_reward
+                profile.save(update_fields=["xp"])
+            except Quest.DoesNotExist:
+                pass
+
         return Response(
             {
                 "weight_logged": weight,
                 "leveled_up": leveled_up,
                 "current_level": profile.level,
+                "quests_completed": completed_quests,
             },
             status=status.HTTP_200_OK,
         )
+
+
+class QuestsView(APIView):
+    """
+    GET /quests/
+
+    Returns today's daily quests, creating them on first call.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        quests = GameEngine.get_or_create_daily_quests(request.user)
+        return Response(QuestSerializer(quests, many=True).data)
 
 
 class StatusView(APIView):

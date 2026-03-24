@@ -4,7 +4,7 @@ DRF serializers for the MassQuest game app.
 
 from rest_framework import serializers
 
-from game.models import CharacterProfile, DailyLog
+from game.models import CharacterProfile, DailyLog, Quest
 
 
 class DailyLogSerializer(serializers.ModelSerializer):
@@ -14,6 +14,18 @@ class DailyLogSerializer(serializers.ModelSerializer):
         model = DailyLog
         fields = ["id", "date", "calories_eaten", "weight_logged"]
         read_only_fields = ["id", "date"]
+
+
+class QuestSerializer(serializers.ModelSerializer):
+    """Serializes a Quest for mobile consumption."""
+
+    class Meta:
+        model = Quest
+        fields = [
+            "id", "quest_type", "description",
+            "target_value", "current_value", "xp_reward", "completed",
+        ]
+        read_only_fields = fields
 
 
 class CharacterProfileSerializer(serializers.ModelSerializer):
