@@ -3,14 +3,17 @@ API views for the MassQuest game app.
 
 Endpoints
 ---------
+POST /register/      — create user + CharacterProfile (no auth required)
+POST /set-target/    — set target_weight on CharacterProfile
 POST /log-calories/  — add calories to today's DailyLog and award XP
 POST /log-weight/    — record today's weight and check for a level-up
 GET  /status/        — return the character's current RPG stats
 """
 
+from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,6 +21,63 @@ from rest_framework.views import APIView
 from game.game_engine import GameEngine
 from game.models import CharacterProfile, DailyLog
 from game.serializers import CharacterProfileSerializer, DailyLogSerializer
+
+
+class RegisterView(APIView):
+    """
+    POST /register/
+
+    Body: { "username": <str>, "password": <str> }
+
+    Creates a Django User and a default CharacterProfile (target_weight=80).
+    No authentication required.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request: Request) -> Response:
+        username = request.data.get("username", "").strip()
+        password = request.data.get("password", "")
+
+        if not username or not password:
+            return Response({"detail": "username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(username=username).exists():
+            return Response({"detail": "Username already taken."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.create_user(username=username, password=password)
+        CharacterProfile.objects.create(user=user, target_weight=80)
+
+        return Response({"id": user.id, "username": user.username}, status=status.HTTP_201_CREATED)
+
+
+class SetTargetView(APIView):
+    """
+    POST /set-target/
+
+    Body: { "target_weight": <float> }
+
+    Updates the CharacterProfile's target_weight.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        target = request.data.get("target_weight")
+
+        try:
+            target = float(target)
+            if target <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response({"detail": "target_weight must be a positive number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile = request.user.character
+        profile.target_weight = target
+        profile.save(update_fields=["target_weight"])
+
+        game_status = GameEngine.get_status(profile)
+        return Response({**CharacterProfileSerializer(profile).data, **game_status}, status=status.HTTP_200_OK)
 
 
 def _get_or_create_today_log(user) -> DailyLog:
