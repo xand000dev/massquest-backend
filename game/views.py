@@ -123,6 +123,7 @@ class LogCaloriesView(APIView):
         xp_gained = GameEngine.calories_to_xp(calories)
         profile.xp += xp_gained
         profile.save(update_fields=["xp"])
+        GameEngine.update_streak(profile)
 
         # Update quests; award bonus XP for completions
         completed_quests = GameEngine.update_quests_for_calories(request.user, calories, log)
@@ -184,6 +185,7 @@ class LogWeightView(APIView):
         profile.current_weight = weight
         profile.save(update_fields=["current_weight"])
 
+        GameEngine.update_streak(profile)
         leveled_up = GameEngine.check_level_up(profile)
 
         completed_quests = GameEngine.update_quests_for_weight(request.user)

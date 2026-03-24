@@ -221,6 +221,32 @@ class GameEngine:
             pass
         return newly_done
 
+    @staticmethod
+    def update_streak(profile: CharacterProfile) -> int:
+        """
+        Called after any log action. Maintains the daily streak counter.
+
+        - First log of today → increment streak (or start at 1 if gap > 1 day)
+        - Already logged today → no change
+
+        Returns the current streak value.
+        """
+        from datetime import timedelta
+
+        today = timezone.localdate()
+
+        if profile.last_log_date == today:
+            return profile.streak  # already counted today
+
+        if profile.last_log_date == today - timedelta(days=1):
+            profile.streak += 1
+        else:
+            profile.streak = 1  # gap or first ever
+
+        profile.last_log_date = today
+        profile.save(update_fields=["streak", "last_log_date"])
+        return profile.streak
+
     @classmethod
     def get_status(cls, profile: CharacterProfile) -> dict:
         """
@@ -234,4 +260,5 @@ class GameEngine:
             "hp": profile.hp,
             "max_hp": profile.max_hp,
             "rank": cls.get_rank(profile.level),
+            "streak": profile.streak,
         }

@@ -43,5 +43,6 @@ class CharacterProfileSerializer(serializers.ModelSerializer):
             "max_hp",
             "target_weight",
             "current_weight",
+            "streak",
         ]
-        read_only_fields = ["level", "xp", "hp", "max_hp"]
+        read_only_fields = ["level", "xp", "hp", "max_hp", "streak"]

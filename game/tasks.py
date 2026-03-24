@@ -49,6 +49,11 @@ def midnight_penalty() -> dict:
 
         username = profile.user.username
 
+        if profile.streak > 0:
+            profile.streak = 0
+            profile.save(update_fields=["streak"])
+            logger.info("midnight_penalty: %s streak reset to 0.", username)
+
         if result["levelled_down"]:
             stats["levelled_down"] += 1
             logger.warning(

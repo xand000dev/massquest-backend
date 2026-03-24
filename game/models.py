@@ -23,6 +23,8 @@ class CharacterProfile(models.Model):
     current_weight = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True, help_text="Current weight in kg"
     )
+    streak = models.PositiveIntegerField(default=0, help_text="Consecutive days with at least one log")
+    last_log_date = models.DateField(null=True, blank=True, help_text="Last date the user logged anything")
 
     def __str__(self) -> str:
         return f"{self.user.username} — Lv.{self.level}"
